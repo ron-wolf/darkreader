@@ -1,24 +1,25 @@
 import type {ParsedColorSchemeConfig} from './utils/colorscheme-parser';
 import type {FilterMode} from './generators/css-filter';
 import type {MessageType} from './utils/message';
+import type {AutomationMode} from './utils/automation';
+import type {ThemeEngine} from './generators/theme-engines';
 
 export interface ExtensionData {
     isEnabled: boolean;
     isReady: boolean;
+    isAllowedFileSchemeAccess: boolean;
     settings: UserSettings;
     news: News[];
     shortcuts: Shortcuts;
     colorScheme: ParsedColorSchemeConfig;
-    forcedScheme: 'dark' | 'light';
-    devtools: {
-        dynamicFixesText: string;
-        filterFixesText: string;
-        staticThemesText: string;
-        hasCustomDynamicFixes: boolean;
-        hasCustomFilterFixes: boolean;
-        hasCustomStaticFixes: boolean;
-    };
+    forcedScheme: 'dark' | 'light' | null;
     activeTab: TabInfo;
+}
+
+export interface DevToolsData {
+    dynamicFixesText: string;
+    filterFixesText: string;
+    staticThemesText: string;
 }
 
 export interface TabData {
@@ -29,7 +30,7 @@ export interface TabData {
 export interface ExtensionActions {
     changeSettings(settings: Partial<UserSettings>): void;
     setTheme(theme: Partial<FilterConfig>): void;
-    setShortcut(command: string, shortcut: string): void;
+    setShortcut(command: string, shortcut: string): Promise<string | null>;
     toggleActiveTab(): void;
     markNewsAsRead(ids: string[]): void;
     markNewsAsDisplayed(ids: string[]): void;
@@ -56,7 +57,7 @@ export interface Theme {
     useFont: boolean;
     fontFamily: string;
     textStroke: number;
-    engine: string;
+    engine: ThemeEngine;
     stylesheet: string;
     darkSchemeBackgroundColor: string;
     darkSchemeTextColor: string;
@@ -86,7 +87,7 @@ export interface ThemePreset {
 
 export interface Automation {
     enabled: boolean;
-    mode: '' | 'time' | 'system' | 'location';
+    mode: AutomationMode;
     behavior: 'OnOff' | 'Scheme';
 }
 
@@ -118,16 +119,16 @@ export interface TimeSettings {
 }
 
 export interface LocationSettings {
-    latitude: number;
-    longitude: number;
+    latitude: number | null;
+    longitude: number | null;
 }
 
 export interface TabInfo {
     url: string;
     isProtected: boolean;
-    isInjected: boolean;
+    isInjected: boolean | null;
     isInDarkList: boolean;
-    isDarkThemeDetected: boolean;
+    isDarkThemeDetected: boolean | null;
 }
 
 export interface Message {
@@ -198,3 +199,6 @@ export interface News {
     badge?: string;
     icon?: string;
 }
+
+// These values need to match those in Manifest
+export type Command = 'toggle' | 'addSite' | 'switchEngine';

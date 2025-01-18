@@ -2,35 +2,35 @@ import {m} from 'malevic';
 import {getContext} from 'malevic/dom';
 import {withState, useState} from 'malevic/state';
 import {Button, MessageBox, Overlay} from '../../controls';
-import ThemeEngines from '../../../generators/theme-engines';
+import {ThemeEngine} from '../../../generators/theme-engines';
 import {DEVTOOLS_DOCS_URL} from '../../../utils/links';
-import type {ExtWrapper} from '../../../definitions';
+import type {DevToolsData, ExtWrapper} from '../../../definitions';
 import {getCurrentThemePreset} from '../../popup/theme/utils';
 import {isFirefox} from '../../../utils/platform';
 
-type BodyProps = ExtWrapper;
+type BodyProps = ExtWrapper & {devtools: DevToolsData};
 
-function Body({data, actions}: BodyProps) {
+function Body({data, actions, devtools}: BodyProps) {
     const context = getContext();
-    const {state, setState} = useState({errorText: null as string});
+    const {state, setState} = useState({errorText: null as string | null});
     let textNode: HTMLTextAreaElement;
     const previewButtonText = data.settings.previewNewDesign ? 'Switch to old design' : 'Preview new design';
     const {theme} = getCurrentThemePreset({data, actions});
 
-    const wrapper = (theme.engine === ThemeEngines.staticTheme
+    const wrapper = (theme.engine === ThemeEngine.staticTheme
         ? {
             header: 'Static Theme Editor',
-            fixesText: data.devtools.staticThemesText,
+            fixesText: devtools.staticThemesText,
             apply: (text: string) => actions.applyDevStaticThemes(text),
             reset: () => actions.resetDevStaticThemes(),
-        } : theme.engine === ThemeEngines.cssFilter || theme.engine === ThemeEngines.svgFilter ? {
+        } : theme.engine === ThemeEngine.cssFilter || theme.engine === ThemeEngine.svgFilter ? {
             header: 'Inversion Fix Editor',
-            fixesText: data.devtools.filterFixesText,
+            fixesText: devtools.filterFixesText,
             apply: (text: string) => actions.applyDevInversionFixes(text),
             reset: () => actions.resetDevInversionFixes(),
         } : {
             header: 'Dynamic Theme Editor',
-            fixesText: data.devtools.dynamicFixesText,
+            fixesText: devtools.dynamicFixesText,
             apply: (text: string) => actions.applyDevDynamicThemeFixes(text),
             reset: () => actions.resetDevDynamicThemeFixes(),
         });

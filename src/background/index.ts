@@ -1,17 +1,43 @@
 import {Extension} from './extension';
 import {getHelpURL, UNINSTALL_URL} from '../utils/links';
 import {canInjectScript} from '../background/utils/extension-api';
-import type {Message} from '../definitions';
+import type {ExtensionData, Message, UserSettings} from '../definitions';
 import {MessageType} from '../utils/message';
 import {makeChromiumHappy} from './make-chromium-happy';
+import {logInfo} from './utils/log';
+import {sendLog} from './utils/sendLog';
 
-// Initialize extension
-const extension = new Extension();
-extension.start();
-if (chrome.commands) {
-    // Firefox Android does not support chrome.commands
-    chrome.commands.onCommand.addListener(async (command) => extension.onCommand(command));
-}
+type TestMessage = {
+    type: 'getManifest';
+    id: number;
+} | {
+    type: 'changeSettings';
+    data: Partial<UserSettings>;
+    id: number;
+} | {
+    type: 'collectData';
+    id: number;
+} | {
+    type: 'getChromeStorage';
+    data: {
+        region: 'local' | 'sync';
+        keys: string | string[];
+    };
+    id: number;
+} | {
+    type: 'changeChromeStorage';
+    data: {
+        region: 'local' | 'sync';
+        data: {[key: string]: any};
+    };
+    id: number;
+} | {
+    type: 'getManifest';
+    id: number;
+};
+
+// Start extension
+const extension = Extension.start();
 
 const welcome = `  /''''\\
  (0)==(0)
@@ -21,10 +47,36 @@ console.log(welcome);
 
 declare const __DEBUG__: boolean;
 declare const __WATCH__: boolean;
+declare const __LOG__: string | false;
 declare const __PORT__: number;
-const WATCH = __WATCH__;
+declare const __TEST__: boolean;
+declare const __CHROMIUM_MV3__: boolean;
 
-if (WATCH) {
+if (__CHROMIUM_MV3__) {
+    chrome.runtime.onInstalled.addListener(async () => {
+        try {
+            (chrome.scripting as any).unregisterContentScripts(() => {
+                (chrome.scripting as any).registerContentScripts([{
+                    id: 'proxy',
+                    matches: [
+                        '<all_urls>'
+                    ],
+                    js: [
+                        'inject/proxy.js',
+                    ],
+                    runAt: 'document_start',
+                    allFrames: true,
+                    persistAcrossSessions: true,
+                    world: 'MAIN',
+                }], () => logInfo('Registerd direct CSS proxy injector.'));
+            });
+        } catch (e) {
+            logInfo('Failed to register direct CSS proxy injector, falling back to other injection methods.');
+        }
+    });
+}
+
+if (__WATCH__) {
     const PORT = __PORT__;
     const ALARM_NAME = 'socket-close';
     const PING_INTERVAL_IN_MINUTES = 1 / 60;
@@ -56,7 +108,7 @@ if (WATCH) {
                     chrome.tabs.query({}, (tabs) => {
                         for (const tab of tabs) {
                             if (canInjectScript(tab.url)) {
-                                chrome.tabs.sendMessage<Message>(tab.id, {type: MessageType.BG_RELOAD});
+                                chrome.tabs.sendMessage<Message>(tab.id!, {type: MessageType.BG_RELOAD});
                             }
                         }
                         chrome.runtime.reload();
@@ -71,7 +123,7 @@ if (WATCH) {
     };
 
     listen();
-} else if (!__DEBUG__){
+} else if (!__DEBUG__ && !__TEST__) {
     chrome.runtime.onInstalled.addListener(({reason}) => {
         if (reason === 'install') {
             chrome.tabs.create({url: getHelpURL()});
@@ -79,6 +131,67 @@ if (WATCH) {
     });
 
     chrome.runtime.setUninstallURL(UNINSTALL_URL);
+}
+
+if (__TEST__) {
+    const socket = new WebSocket(`ws://localhost:8894`);
+    socket.onopen = async () => {
+        // Wait for extension to start
+        await extension;
+        socket.send(JSON.stringify({
+            data: {
+                type: 'background',
+                extensionOrigin: chrome.runtime.getURL(''),
+            },
+            id: null,
+        }));
+    };
+    socket.onmessage = (e) => {
+        try {
+            const message: TestMessage = JSON.parse(e.data);
+            const {id, type} = message;
+            const respond = (data?: ExtensionData | string | boolean | {[key: string]: string} | null) => socket.send(JSON.stringify({
+                data,
+                id,
+            }));
+
+            switch (type) {
+                case 'changeSettings':
+                    Extension.changeSettings(message.data);
+                    respond();
+                    break;
+                case 'collectData':
+                    Extension.collectData().then(respond);
+                    break;
+                case 'getManifest': {
+                    const data = chrome.runtime.getManifest();
+                    respond(data);
+                    break;
+                }
+                case 'changeChromeStorage': {
+                    const region = message.data.region;
+                    chrome.storage[region].set(message.data.data, () => respond());
+                    break;
+                }
+                case 'getChromeStorage': {
+                    const keys = message.data.keys;
+                    const region = message.data.region;
+                    chrome.storage[region].get(keys, respond);
+                    break;
+                }
+            }
+        } catch (err) {
+            socket.send(JSON.stringify({error: String(err), original: e.data}));
+        }
+    };
+}
+
+if (__DEBUG__ && __LOG__) {
+    chrome.runtime.onMessage.addListener((message: Message) => {
+        if (message.type === 'cs-log') {
+            sendLog(message.data.level, message.data.log);
+        }
+    });
 }
 
 makeChromiumHappy();

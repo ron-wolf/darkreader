@@ -1,10 +1,10 @@
 export enum MessageType {
     UI_GET_DATA = 'ui-get-data',
+    UI_GET_DEVTOOLS_DATA = 'ui-get-devtools-data',
     UI_SUBSCRIBE_TO_CHANGES = 'ui-subscribe-to-changes',
     UI_UNSUBSCRIBE_FROM_CHANGES = 'ui-unsubscribe-from-changes',
     UI_CHANGE_SETTINGS = 'ui-change-settings',
     UI_SET_THEME = 'ui-set-theme',
-    UI_SET_SHORTCUT = 'ui-set-shortcut',
     UI_TOGGLE_ACTIVE_TAB = 'ui-toggle-active-tab',
     UI_MARK_NEWS_AS_READ = 'ui-mark-news-as-read',
     UI_MARK_NEWS_AS_DISPLAYED = 'ui-mark-news-as-displayed',
@@ -41,4 +41,5 @@ export enum MessageType {
     CS_FETCH = 'cs-fetch',
     CS_DARK_THEME_DETECTED = 'cs-dark-theme-detected',
     CS_DARK_THEME_NOT_DETECTED = 'cs-dark-theme-not-detected',
+    CS_LOG = 'cs-log',
 }

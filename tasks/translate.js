@@ -1,12 +1,12 @@
 // @ts-check
-const fs = require('fs').promises;
-const {readFile, writeFile, httpsRequest, timeout, log} = require('./utils');
+import fs from 'fs/promises';
+import {readFile, writeFile, httpsRequest, timeout, log} from './utils.js';
 
 // To use this tool:
 // 1. Edit a line in en.config.
 // 2. Run `npm run translate-line 123` where 123 is a line number starting from 1.
 // 3. The line will be translated and written into other locales.
-// TODO: If neccessary, new @id and empty lines should be copied as well.
+// TODO: If necessary, new @id and empty lines should be copied as well.
 // TODO: Serbian translates into Cyrillic, but it is somehow possible to do Latin.
 
 /** @typedef {{locale: string; file: string; content: string}} LocaleFile */
@@ -24,6 +24,9 @@ async function translateEnLine(lineNumber) {
     const enLocale = locales.find((l) => l.locale === 'en');
     const otherLocales = locales.filter((l) => l.locale !== 'en');
 
+    if (!enLocale) {
+        throw new Error('Could not find English (en) locale.');
+    }
     const enLines = enLocale.content.split('\n');
     const index = lineNumber - 1;
     const line = enLines[index];

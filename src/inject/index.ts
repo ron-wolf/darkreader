@@ -2,16 +2,20 @@ import {createOrUpdateStyle, removeStyle} from './style';
 import {createOrUpdateSVGFilter, removeSVGFilter} from './svg-filter';
 import {runDarkThemeDetector, stopDarkThemeDetector} from './detector';
 import {createOrUpdateDynamicTheme, removeDynamicTheme, cleanDynamicThemeCache} from './dynamic-theme';
-import {logWarn, logInfoCollapsed} from '../utils/log';
-import {isSystemDarkScheme, runColorSchemeChangeDetector, stopColorSchemeChangeDetector} from './utils/watch-color-scheme';
+import {logWarn, logInfoCollapsed} from './utils/log';
+import {isSystemDarkModeEnabled, runColorSchemeChangeDetector, stopColorSchemeChangeDetector} from '../utils/media-query';
 import {collectCSS} from './dynamic-theme/css-collection';
-import type {Message} from '../definitions';
+import type {DynamicThemeFix, Message, Theme} from '../definitions';
 import {MessageType} from '../utils/message';
-import {isThunderbird} from '../utils/platform';
+
+declare const __TEST__: boolean;
 
 let unloaded = false;
 
-declare const __MV3__: boolean;
+let darkReaderDynamicThemeStateForTesting: 'loading' | 'ready' = 'loading';
+
+declare const __CHROMIUM_MV3__: boolean;
+declare const __THUNDERBIRD__: boolean;
 
 function cleanup() {
     unloaded = true;
@@ -23,11 +27,15 @@ function cleanup() {
     stopColorSchemeChangeDetector();
 }
 
+function sendMessageForTesting(uuid: string) {
+    document.dispatchEvent(new CustomEvent('test-message', {detail: uuid}));
+}
+
 function sendMessage(message: Message) {
     if (unloaded) {
         return;
     }
-    const responseHandler = (response: 'unsupportedSender' | undefined) => {
+    const responseHandler = (response: Message | 'unsupportedSender' | undefined) => {
         // Vivaldi bug workaround. See TabManager for details.
         if (response === 'unsupportedSender') {
             removeStyle();
@@ -38,8 +46,8 @@ function sendMessage(message: Message) {
     };
 
     try {
-        if (__MV3__) {
-            const promise: Promise<Message | 'unsupportedSender'> = chrome.runtime.sendMessage<Message>(message) as any;
+        if (__CHROMIUM_MV3__) {
+            const promise = chrome.runtime.sendMessage<Message, Message | 'unsupportedSender'>(message);
             promise.then(responseHandler).catch(cleanup);
         } else {
             chrome.runtime.sendMessage<Message, 'unsupportedSender' | undefined>(message, responseHandler);
@@ -99,7 +107,7 @@ function onMessage({type, data}: Message) {
             break;
         }
         case MessageType.BG_ADD_DYNAMIC_THEME: {
-            const {theme, fixes, isIFrame, detectDarkTheme} = data;
+            const {theme, fixes, isIFrame, detectDarkTheme} = data as {theme: Theme; fixes: DynamicThemeFix[]; isIFrame: boolean; detectDarkTheme: boolean};
             removeStyle();
             createOrUpdateDynamicTheme(theme, fixes, isIFrame);
             if (detectDarkTheme) {
@@ -109,6 +117,11 @@ function onMessage({type, data}: Message) {
                         onDarkThemeDetected();
                     }
                 });
+            }
+            if (__TEST__) {
+                darkReaderDynamicThemeStateForTesting = 'ready';
+                sendMessageForTesting('darkreader-dynamic-theme-ready');
+                sendMessageForTesting(`darkreader-dynamic-theme-ready-${document.location.pathname}`);
             }
             break;
         }
@@ -136,7 +149,7 @@ runColorSchemeChangeDetector((isDark) =>
 );
 
 chrome.runtime.onMessage.addListener(onMessage);
-sendMessage({type: MessageType.CS_FRAME_CONNECT, data: {isDark: isSystemDarkScheme()}});
+sendMessage({type: MessageType.CS_FRAME_CONNECT, data: {isDark: isSystemDarkModeEnabled()}});
 
 function onPageHide(e: PageTransitionEvent) {
     if (e.persisted === false) {
@@ -149,17 +162,66 @@ function onFreeze() {
 }
 
 function onResume() {
-    sendMessage({type: MessageType.CS_FRAME_RESUME, data: {isDark: isSystemDarkScheme()}});
+    sendMessage({type: MessageType.CS_FRAME_RESUME, data: {isDark: isSystemDarkModeEnabled()}});
 }
 
 function onDarkThemeDetected() {
     sendMessage({type: MessageType.CS_DARK_THEME_DETECTED});
 }
 
-// Thunderbird don't has "tabs", and emails aren't 'frozen' or 'cached'.
+// Thunderbird does not have "tabs", and emails aren't 'frozen' or 'cached'.
 // And will currently error: `Promise rejected after context unloaded: Actor 'Conduits' destroyed before query 'RuntimeMessage' was resolved`
-if (!isThunderbird) {
+if (!__THUNDERBIRD__) {
     addEventListener('pagehide', onPageHide);
     addEventListener('freeze', onFreeze);
     addEventListener('resume', onResume);
+}
+
+if (__TEST__) {
+    async function awaitDOMContentLoaded() {
+        if (document.readyState === 'loading') {
+            return new Promise<void>((resolve) => {
+                addEventListener('DOMContentLoaded', () => resolve());
+            });
+        }
+    }
+
+    async function awaitDarkReaderReady() {
+        if (darkReaderDynamicThemeStateForTesting !== 'ready') {
+            return new Promise<void>((resolve) => {
+                document.addEventListener('test-message', (event: CustomEvent) => {
+                    const message = event.detail;
+                    if (message === 'darkreader-dynamic-theme-ready' && darkReaderDynamicThemeStateForTesting === 'ready') {
+                        resolve();
+                    }
+                });
+            });
+        }
+    }
+
+    const socket = new WebSocket(`ws://localhost:8894`);
+    socket.onopen = async () => {
+        document.addEventListener('test-message', (e: CustomEvent) => {
+            socket.send(JSON.stringify({
+                data: {
+                    type: 'page',
+                    uuid: e.detail,
+                },
+                id: null,
+            }));
+        });
+
+        // Wait for DOM to be complete
+        // Note that here we wait only for DOM parsing and not for subresource load
+        await awaitDOMContentLoaded();
+        await awaitDarkReaderReady();
+        socket.send(JSON.stringify({
+            data: {
+                type: 'page',
+                message: 'page-ready',
+                uuid: `ready-${document.location.pathname}`,
+            },
+            id: null,
+        }));
+    };
 }

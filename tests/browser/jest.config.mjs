@@ -1,7 +1,8 @@
 // @ts-check
 
-const {dirname} = require('path');
-const rootDir = dirname(require.resolve('../../package.json'));
+import {dirname} from 'path';
+import {createRequire} from 'module';
+const rootDir = dirname(createRequire(import.meta.url).resolve('../../package.json'));
 
 /** @type {import('@jest/types').Config.InitialOptions} */
 const config = {
@@ -10,11 +11,13 @@ const config = {
     moduleFileExtensions: ['ts', 'tsx', 'js'],
     testEnvironment: '<rootDir>/tests/browser/environment.js',
     verbose: true,
-    transform: {'^.+\\.ts(x?)$': 'ts-jest'},
+    transform: {'^.+\\.ts(x?)$': ['ts-jest', {tsconfig: '<rootDir>/tests/browser/tsconfig.json'}]},
     globals: {
-        'ts-jest': {tsconfig: '<rootDir>/tests/browser/tsconfig.json'},
         __DEBUG__: false,
-        __MV3__: false,
+        __CHROMIUM_MV2__: true,
+        __CHROMIUM_MV3__: false,
+        __FIREFOX__: false,
+        __THUNDERBIRD__: false,
         __TEST__: true,
         product: 'chrome',
     },
@@ -25,4 +28,4 @@ const config = {
     coveragePathIgnorePatterns: ['^.+\\.d\\.ts$'],
 };
 
-module.exports = config;
+export default config;
