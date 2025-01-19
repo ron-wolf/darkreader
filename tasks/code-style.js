@@ -1,9 +1,10 @@
 // @ts-check
-import prettier from 'prettier';
-import paths from './paths.js';
+import {format} from 'prettier';
+
+import {getDestDir} from './paths.js';
+import {PLATFORM} from './platform.js';
 import {createTask} from './task.js';
 import {readFile, writeFile, getPaths} from './utils.js';
-const {getDestDir, PLATFORM} = paths;
 
 /** @type {import('prettier').Options} */
 const options = {
@@ -22,7 +23,7 @@ const extensions = ['html', 'css', 'js'];
 async function processAPIBuild() {
     const filepath = 'darkreader.js';
     const code = await readFile(filepath);
-    const formatted = prettier.format(code, {
+    const formatted = await format(code, {
         ...options,
         filepath,
     });
@@ -36,7 +37,7 @@ async function processExtensionPlatform(platform) {
     const files = await getPaths(extensions.map((ext) => `${dir}/**/*.${ext}`));
     for (const file of files) {
         const code = await readFile(file);
-        const formatted = prettier.format(code, {
+        const formatted = await format(code, {
             ...options,
             filepath: file,
         });

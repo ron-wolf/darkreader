@@ -1,38 +1,37 @@
 // @ts-check
-import path from './paths.js';
+import {getDestDir, absolutePath} from './paths.js';
+import {PLATFORM} from './platform.js';
 import * as reload from './reload.js';
 import {createTask} from './task.js';
-import {readFile, writeFile} from './utils.js';
-const {PLATFORM, getDestDir} = path;
-
-const srcDir = 'src';
-
-async function readJSON(path) {
-    const file = await readFile(path);
-    return JSON.parse(file);
-}
-
-async function writeJSON(path, json) {
-    const content = JSON.stringify(json, null, 4);
-    return await writeFile(path, content);
-}
+import {readJSON, writeJSON} from './utils.js';
 
 async function patchManifest(platform, debug, watch, test) {
-    const manifest = await readJSON(`${srcDir}/manifest.json`);
-    const manifestPatch = platform === PLATFORM.CHROME ? {} : await readJSON(`${srcDir}/manifest-${platform}.json`);
-    const patched = {...manifest, ...manifestPatch};
-    if (platform === PLATFORM.CHROME_MV3) {
+    const manifest = await readJSON(absolutePath('src/manifest.json'));
+    const manifestPatch = platform === PLATFORM.CHROMIUM_MV2 || platform === PLATFORM.CHROMIUM_MV2_PLUS ? {} : await readJSON(absolutePath(`src/manifest-${platform.replace('-plus', '')}.json`));
+    const manifestExtras = platform === PLATFORM.CHROMIUM_MV2_PLUS ? await readJSON(absolutePath(`src/plus/manifest.json`)) : {};
+    const patched = {...manifest, ...manifestPatch, ...manifestExtras};
+    if (debug && platform === PLATFORM.CHROMIUM_MV3) {
+        patched.name = 'Dark Reader MV3';
+    }
+    if (platform === PLATFORM.CHROMIUM_MV3) {
         patched.browser_action = undefined;
     }
     if (debug) {
         patched.version = '1';
         patched.description = `Debug build, platform: ${platform}, watch: ${watch ? 'yes' : 'no'}.`;
     }
-    if (debug && !test && platform === PLATFORM.CHROME_MV3) {
+    if (debug && !test && platform === PLATFORM.CHROMIUM_MV3) {
         patched.permissions.push('tabs');
     }
-    if (debug && (platform === PLATFORM.CHROME || platform === PLATFORM.CHROME_MV3)) {
+    if (debug && (platform === PLATFORM.CHROMIUM_MV2 || platform === PLATFORM.CHROMIUM_MV3)) {
         patched.version_name = 'Debug';
+    }
+    if (debug && platform === PLATFORM.CHROMIUM_MV2_PLUS) {
+        patched.version_name = 'Debug Plus';
+    }
+    // Needed to test settings export and CSS theme export via a download
+    if (test || debug) {
+        patched.permissions.push('downloads');
     }
     return patched;
 }
@@ -55,7 +54,7 @@ const bundleManifestTask = createTask(
         const chrome = changedFiles.some((file) => file.endsWith('manifest.json'));
         const platforms = {};
         for (const platform of Object.values(PLATFORM)) {
-            const changed = chrome || changedFiles.some((file) => file.endsWith(`manifest-${platform}.json`));
+            const changed = chrome || changedFiles.some((file) => file.endsWith(`manifest-${platform.replace('-plus', '')}.json`));
             platforms[platform] = changed && buildPlatforms[platform];
         }
         await manifests({platforms, debug: true, watch: true, test: false});

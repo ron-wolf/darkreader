@@ -1,11 +1,13 @@
 // @ts-check
-import fs from 'fs';
-import {exec} from 'child_process';
+import {exec} from 'node:child_process';
+import fs from 'node:fs';
+
 import yazl from 'yazl';
-import paths from './paths.js';
+
+import {getDestDir} from './paths.js';
+import {PLATFORM} from './platform.js';
 import {createTask} from './task.js';
 import {getPaths} from './utils.js';
-const {getDestDir, PLATFORM} = paths;
 
 /**
  * @param {object} details
@@ -46,19 +48,22 @@ async function getLastCommitTime() {
         ))));
 }
 
-async function zip({platforms, debug}) {
+async function zip({platforms, debug, version}) {
     if (debug) {
         throw new Error('zip task does not support debug builds');
     }
+    version = version ? `-${version}` : '';
     const releaseDir = 'build/release';
     const promises = [];
     const date = await getLastCommitTime();
+    /** @type {Array<import('./types.js').PlatformId>} */
+    const chromePlatforms = [PLATFORM.CHROMIUM_MV2, PLATFORM.CHROMIUM_MV3, PLATFORM.CHROMIUM_MV2_PLUS];
     const enabledPlatforms = Object.values(PLATFORM).filter((platform) => platform !== PLATFORM.API && platforms[platform]);
     for (const platform of enabledPlatforms) {
-        const format = [PLATFORM.CHROME, PLATFORM.CHROME_MV3].includes(platform) ? 'zip' : 'xpi';
+        const format = chromePlatforms.includes(platform) ? 'zip' : 'xpi';
         promises.push(archiveDirectory({
             dir: getDestDir({debug, platform}),
-            dest: `${releaseDir}/darkreader-${platform}.${format}`,
+            dest: `${releaseDir}/darkreader-${platform}${version}.${format}`,
             date,
             // Reproducible builds: set permission flags on file like chmod 644 or -rw-r--r--
             // This is needed because the built file might have different flags on different systems

@@ -3,10 +3,15 @@
 build/
 darkreader.js
 debug.log
+src/plus
 
 # Node.js modules
 #-----------------------------------
 node_modules/
+
+# Test results
+#-----------------------------------
+test-results-*.json
 
 # Code coverage reports
 #-----------------------------------
@@ -29,3 +34,8 @@ coverage/
 # V8 Profiler logs
 #-----------------------------------
 isolate-*-v8.log
+
+# Deno
+#-----------------------------------
+deno.lock
+deno.json

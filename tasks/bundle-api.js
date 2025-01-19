@@ -1,16 +1,17 @@
 // @ts-check
-import * as rollup from 'rollup';
-import rollupPluginNodeResolve from '@rollup/plugin-node-resolve';
-/** @type {any} */
+import fs from 'node:fs';
+import os from 'node:os';
+
 import rollupPluginReplace from '@rollup/plugin-replace';
-/** @type {any} */
 import rollupPluginTypescript from '@rollup/plugin-typescript';
+import * as rollup from 'rollup';
+/** @type {any} */
+/** @type {any} */
 import typescript from 'typescript';
-import fs from 'fs';
-import os from 'os';
+
+
+import {absolutePath} from './paths.js';
 import {createTask} from './task.js';
-import paths from './paths.js';
-const {rootDir, rootPath} = paths;
 
 async function getVersion() {
     const file = await fs.promises.readFile(new URL('../package.json', import.meta.url), 'utf8');
@@ -21,17 +22,20 @@ async function getVersion() {
 let watchFiles = [];
 
 async function bundleAPI({debug, watch}) {
-    const src = rootPath('src/api/index.ts');
+    const src = absolutePath('src/api/index.ts');
     const dest = 'darkreader.js';
     const bundle = await rollup.rollup({
         input: src,
+        onwarn: (error) => {
+            throw error;
+        },
         plugins: [
-            rollupPluginNodeResolve(),
             rollupPluginTypescript({
-                rootDir,
+                rootDir: absolutePath('.'),
                 typescript,
-                tsconfig: rootPath('src/api/tsconfig.json'),
+                tsconfig: absolutePath('src/api/tsconfig.json'),
                 noImplicitAny: debug ? false : true,
+                noUnusedLocals: debug ? false : true,
                 strictNullChecks: debug ? false : true,
                 removeComments: debug ? false : true,
                 sourceMap: debug ? true : false,
@@ -44,16 +48,16 @@ async function bundleAPI({debug, watch}) {
                 __DEBUG__: false,
                 __CHROMIUM_MV2__: false,
                 __CHROMIUM_MV3__: false,
-                __FIREFOX__: false,
+                __FIREFOX_MV2__: false,
                 __THUNDERBIRD__: false,
                 __TEST__: false,
             }),
-        ].filter((x) => x)
+        ].filter(Boolean),
     });
     watchFiles = bundle.watchFiles;
     await bundle.write({
         banner: `/**\n * Dark Reader v${await getVersion()}\n * https://darkreader.org/\n */\n`,
-        // TODO: Consider remving next line
+        // TODO: Consider removing next line
         esModule: true,
         file: dest,
         strict: true,

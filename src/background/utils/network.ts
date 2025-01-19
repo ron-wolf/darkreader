@@ -1,13 +1,17 @@
 import {loadAsDataURL, loadAsText} from '../../utils/network';
+import {isXMLHttpRequestSupported, isFetchSupported} from '../../utils/platform';
 import {getStringSize} from '../../utils/text';
 import {getDuration} from '../../utils/time';
-import {isXMLHttpRequestSupported, isFetchSupported} from '../../utils/platform';
 
 declare const __TEST__: boolean;
 
 interface RequestParams {
     url: string;
     timeout?: number;
+}
+
+interface FileLoader {
+    get: (fetchRequestParameters: FetchRequestParameters) => Promise<string | null>;
 }
 
 export async function readText(params: RequestParams): Promise<string> {
@@ -100,11 +104,11 @@ class LimitedCacheStorage {
         }
     }
 
-    public has(url: string) {
+    has(url: string) {
         return this.records.has(url);
     }
 
-    public get(url: string) {
+    get(url: string) {
         if (this.records.has(url)) {
             const record = this.records.get(url)!;
             record.expires = Date.now() + LimitedCacheStorage.TTL;
@@ -115,7 +119,7 @@ class LimitedCacheStorage {
         return null;
     }
 
-    public set(url: string, value: string) {
+    set(url: string, value: string) {
         LimitedCacheStorage.ensureAlarmIsScheduled();
 
         const size = getStringSize(value);
@@ -161,7 +165,7 @@ export interface FetchRequestParameters {
     origin?: string;
 }
 
-export function createFileLoader() {
+export function createFileLoader(): FileLoader {
     const caches = {
         'data-url': new LimitedCacheStorage(),
         'text': new LimitedCacheStorage(),
